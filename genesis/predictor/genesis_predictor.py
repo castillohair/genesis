@@ -1,14 +1,14 @@
-import keras
-from keras.models import Sequential, Model, load_model
-from keras.layers import Dense, Dropout, Activation, Flatten, Input, Lambda
-from keras.layers import Conv2D, MaxPooling2D, Conv1D, MaxPooling1D, LSTM, ConvLSTM2D, GRU, BatchNormalization, LocallyConnected2D, Permute
-from keras.layers import Concatenate, Reshape, Softmax, Conv2DTranspose, Embedding, Multiply
-from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras import regularizers
-from keras import backend as K
-import keras.losses
-
 import tensorflow as tf
+
+from tensorflow import keras
+from tensorflow.keras.models import Sequential, Model, load_model
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Input, Lambda
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Conv1D, MaxPooling1D, LSTM, ConvLSTM2D, GRU, BatchNormalization, LocallyConnected2D, Permute
+from tensorflow.keras.layers import Concatenate, Reshape, Softmax, Conv2DTranspose, Embedding, Multiply
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras import regularizers
+from tensorflow.keras import backend as K
+import tensorflow.keras.losses
 
 import isolearn.keras as iso
 
@@ -57,7 +57,8 @@ def build_predictor(generator_model, load_predictor_function, batch_size, n_samp
 
 	predictor_model = Model(
 		inputs = generator_model.inputs + predictor_inputs,
-		outputs = generator_model.outputs + predictor_outputs
+		outputs = generator_model.outputs + predictor_outputs,
+		name='predictor_model',
 	)
 
 	post_compile_function(predictor_model)
