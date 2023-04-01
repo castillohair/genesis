@@ -1,15 +1,16 @@
-import keras
-from keras.models import Sequential, Model, load_model
-from keras.layers import Dense, Dropout, Activation, Flatten, Input, Lambda
-from keras.layers import Conv2D, MaxPooling2D, Conv1D, MaxPooling1D, LSTM, ConvLSTM2D, GRU, BatchNormalization, LocallyConnected2D, Permute
-from keras.layers import Concatenate, Reshape, Softmax, Conv2DTranspose, Embedding, Multiply
-from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras import regularizers
-from keras import backend as K
-import keras.losses
-
 import tensorflow as tf
 from tensorflow.python.framework import ops
+
+from tensorflow import keras
+from tensorflow.keras.models import Sequential, Model, load_model
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Input, Lambda
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Conv1D, MaxPooling1D, LSTM, ConvLSTM2D, GRU, BatchNormalization, LocallyConnected2D, Permute
+from tensorflow.keras.layers import Concatenate, Reshape, Softmax, Conv2DTranspose, Embedding, Multiply
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras import regularizers
+from tensorflow.keras import backend as K
+from tensorflow.python.keras import backend as Kpy
+import tensorflow.keras.losses
 
 import isolearn.keras as iso
 
@@ -20,24 +21,44 @@ import numpy as np
 #See Github https://github.com/spitis/
 
 def st_sampled_softmax(logits):
-	with ops.name_scope("STSampledSoftmax") as namescope :
-		nt_probs = tf.nn.softmax(logits)
-		onehot_dim = logits.get_shape().as_list()[1]
-		sampled_onehot = tf.one_hot(tf.squeeze(tf.multinomial(logits, 1), 1), onehot_dim, 1.0, 0.0)
-		with tf.get_default_graph().gradient_override_map({'Ceil': 'Identity', 'Mul': 'STMul'}):
-			return tf.ceil(sampled_onehot * nt_probs)
+	"""TODO: docstring"""
+
+	@tf.custom_gradient
+	def st_sampled_softmax_custom_grad(nt_probs):
+		def grad(upstream):
+			return upstream
+		onehot_dim = nt_probs.get_shape().as_list()[1]
+		sampled_onehot = tf.one_hot(
+			tf.squeeze(tf.random.categorical(tf.math.log(nt_probs), 1,), 1),
+			onehot_dim,
+			1.0,
+			0.0,
+		)
+
+		return sampled_onehot, grad
+	
+	nt_probs = tf.nn.softmax(logits)
+	return st_sampled_softmax_custom_grad(nt_probs)
 
 def st_hardmax_softmax(logits):
-	with ops.name_scope("STHardmaxSoftmax") as namescope :
-		nt_probs = tf.nn.softmax(logits)
-		onehot_dim = logits.get_shape().as_list()[1]
-		sampled_onehot = tf.one_hot(tf.argmax(nt_probs, 1), onehot_dim, 1.0, 0.0)
-		with tf.get_default_graph().gradient_override_map({'Ceil': 'Identity', 'Mul': 'STMul'}):
-			return tf.ceil(sampled_onehot * nt_probs)
+	"""TODO: docstring"""
 
-@ops.RegisterGradient("STMul")
-def st_mul(op, grad):
-	return [grad, grad]
+	@tf.custom_gradient
+	def st_hardmax_softmax_custom_grad(nt_probs):
+		def grad(upstream):
+			return upstream
+		onehot_dim = nt_probs.get_shape().as_list()[1]
+		sampled_onehot = tf.one_hot(
+			tf.argmax(nt_probs, 1),
+			onehot_dim,
+			1.0,
+			0.0,
+		)
+
+		return sampled_onehot, grad
+	
+	nt_probs = tf.nn.softmax(logits)
+	return st_hardmax_softmax_custom_grad(nt_probs)
 
 #PWM Masking and Sampling helper functions
 
@@ -64,7 +85,8 @@ def sample_pwm(pwm_logits) :
 	seq_length = K.shape(pwm_logits)[1]
 	
 	flat_pwm = K.reshape(pwm_logits, (n_sequences * seq_length, 4))
-	sampled_pwm = K.switch(K.learning_phase(), st_sampled_softmax(flat_pwm), st_hardmax_softmax(flat_pwm))
+	sampled_pwm = K.switch(Kpy.symbolic_learning_phase(), st_sampled_softmax(flat_pwm), st_hardmax_softmax(flat_pwm))
+	# sampled_pwm = st_hardmax_softmax(flat_pwm)
 
 	return K.reshape(sampled_pwm, (n_sequences, seq_length, 4, 1))
 
@@ -128,8 +150,8 @@ def build_generator(batch_size, seq_length, load_generator_function, n_classes=1
 	sequence_class_input, sequence_class = None, None
 	#Seed class input for all dense/embedding layers
 	if not supply_inputs :
-		sequence_class_input = Input(tensor=K.ones((batch_size, 1)), dtype='int32', name='sequence_class_seed')
-		sequence_class = Lambda(lambda inp: K.cast(K.round(inp * K.random_uniform((batch_size, 1), minval=-0.4999, maxval=n_classes-0.5001)), dtype='int32'), name='lambda_rand_sequence_class')(sequence_class_input)
+		sequence_class_input = Input(tensor=K.ones((batch_size, 1), dtype='int32'), dtype='int32', name='sequence_class_seed')
+		sequence_class = Lambda(lambda inp: K.cast(K.round(K.cast(inp, dtype='float32') * K.random_uniform((batch_size, 1), minval=-0.4999, maxval=n_classes-0.5001)), dtype='int32'), name='lambda_rand_sequence_class')(sequence_class_input)
 	else :
 		sequence_class_input = Input(batch_shape=(batch_size, 1), dtype='int32', name='sequence_class_seed')
 		sequence_class = Lambda(lambda inp: inp, name='lambda_rand_sequence_class')(sequence_class_input)
@@ -149,7 +171,7 @@ def build_generator(batch_size, seq_length, load_generator_function, n_classes=1
 
 
 	#Initialize Templating and Masking Lambda layer
-	masking_layer = Lambda(mask_pwm, output_shape = (seq_length, 4, 1), name='masking_layer')
+	masking_layer = Lambda(lambda x: mask_pwm(x), name='masking_layer')
 
 	#Batch Normalize PWM Logits
 	if batch_normalize_pwm :
@@ -221,7 +243,8 @@ def build_generator(batch_size, seq_length, load_generator_function, n_classes=1
 
 			,onehot_mask
 			,sampled_onehot_mask
-		] + extra_outputs
+		] + extra_outputs,
+		name='generator_model',
 	)
 
 	if sequence_templates is not None :

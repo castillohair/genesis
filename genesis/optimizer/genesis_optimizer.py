@@ -1,14 +1,14 @@
-import keras
-from keras.models import Sequential, Model, load_model
-from keras.layers import Dense, Dropout, Activation, Flatten, Input, Lambda
-from keras.layers import Conv2D, MaxPooling2D, Conv1D, MaxPooling1D, LSTM, ConvLSTM2D, GRU, BatchNormalization, LocallyConnected2D, Permute
-from keras.layers import Concatenate, Reshape, Softmax, Conv2DTranspose, Embedding, Multiply
-from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras import regularizers
-from keras import backend as K
-import keras.losses
-
 import tensorflow as tf
+
+from tensorflow import keras
+from tensorflow.keras.models import Sequential, Model, load_model
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Input, Lambda
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Conv1D, MaxPooling1D, LSTM, ConvLSTM2D, GRU, BatchNormalization, LocallyConnected2D, Permute
+from tensorflow.keras.layers import Concatenate, Reshape, Softmax, Conv2DTranspose, Embedding, Multiply
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras import regularizers
+from tensorflow.keras import backend as K
+import tensorflow.keras.losses
 
 import isolearn.keras as iso
 
@@ -396,6 +396,6 @@ def build_loss_model(predictor_model, loss_func, extra_loss_tensors=[]) :
 
 	loss_out = Lambda(lambda out: loss_func(out), output_shape = (1,))(predictor_model.inputs + predictor_model.outputs + extra_loss_tensors)
 
-	loss_model = Model(predictor_model.inputs, loss_out)#extra_loss_tensors
+	loss_model = Model(predictor_model.inputs, loss_out, name='loss_model')#extra_loss_tensors
 
 	return 'loss_model', loss_model
